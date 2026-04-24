@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { storage } from './supabase.js'
 
-const DEFAULT_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5]
+const DEFAULT_PARS = [4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 5, 4, 3, 4, 4, 3, 4, 5]
 const DEFAULT_HIDDEN = [2, 5, 7, 12, 15, 3, 9, 14, 17, 4, 11, 16]
 
 const keyFromName = (name) => {
@@ -31,8 +31,6 @@ export default function App() {
   // Setup/Settings form
   const [sfPars, setSfPars] = useState([...DEFAULT_PARS])
   const [sfHidden, setSfHidden] = useState([...DEFAULT_HIDDEN])
-  const [sfCap, setSfCap] = useState(40)
-  const [sfMult, setSfMult] = useState(true)
   const [sfPass, setSfPass] = useState('')
   const [sfEvent, setSfEvent] = useState('ダンロップ杯')
 
@@ -53,8 +51,6 @@ export default function App() {
         setConfig(cfg)
         setSfPars(cfg.pars)
         setSfHidden(cfg.hidden)
-        setSfCap(cfg.cap)
-        setSfMult(cfg.use80)
         setSfPass(cfg.pass)
         setSfEvent(cfg.eventName)
         await loadPlayers()
@@ -99,9 +95,7 @@ export default function App() {
     const gross = nums.reduce((a, b) => a + b, 0)
     const hiddenSum = cfg.hidden.reduce((s, h) => s + (nums[h - 1] || 0), 0)
     const parSum = cfg.pars.reduce((a, b) => a + b, 0)
-    let hdcp = hiddenSum * 1.5 - parSum
-    if (cfg.use80) hdcp *= 0.8
-    if (hdcp > cfg.cap) hdcp = cfg.cap
+    let hdcp = (hiddenSum * 1.5 - parSum) * 0.8
     if (hdcp < 0) hdcp = 0
     hdcp = Math.round(hdcp * 10) / 10
     const net = Math.round((gross - hdcp) * 10) / 10
@@ -138,7 +132,6 @@ export default function App() {
     const cfg = {
       pars: sfPars,
       hidden: [...sfHidden].sort((a, b) => a - b),
-      cap: sfCap, use80: sfMult,
       pass: sfPass.trim(), eventName: sfEvent.trim() || 'コンペ',
     }
     try {
@@ -157,7 +150,6 @@ export default function App() {
     const cfg = {
       pars: sfPars,
       hidden: [...sfHidden].sort((a, b) => a - b),
-      cap: sfCap, use80: sfMult,
       pass: sfPass.trim() || config.pass,
       eventName: sfEvent.trim() || 'コンペ',
     }
@@ -205,7 +197,7 @@ export default function App() {
       try { await storage.delete('config') } catch {}
       setPlayers([]); setConfig(null)
       setSfPars([...DEFAULT_PARS]); setSfHidden([...DEFAULT_HIDDEN])
-      setSfCap(40); setSfMult(true); setSfPass(''); setSfEvent('ダンロップ杯')
+      setSfPass(''); setSfEvent('ダンロップ杯')
       setView('setup')
     } catch {}
   }
@@ -311,23 +303,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="body-jp text-[10px] font-bold text-stone-700 uppercase tracking-[0.2em] mb-1.5 block">HDCP上限</label>
-                <input type="number" value={sfCap} onChange={(e) => setSfCap(parseInt(e.target.value) || 0)}
-                  className="body-jp w-full px-4 py-3 bg-stone-50 rounded-lg border border-stone-300 focus:border-emerald-700 focus:outline-none text-sm" />
-              </div>
-              <div>
-                <label className="body-jp text-[10px] font-bold text-stone-700 uppercase tracking-[0.2em] mb-1.5 block">係数×0.8</label>
-                <button onClick={() => setSfMult(!sfMult)}
-                  className={`body-jp w-full px-4 py-3 rounded-lg border text-sm transition ${sfMult ? 'bg-emerald-800 text-amber-100 border-emerald-800' : 'bg-stone-50 text-stone-700 border-stone-300'}`}>
-                  {sfMult ? 'あり' : 'なし'}
-                </button>
-              </div>
-            </div>
-
             <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3 body-jp text-[11px] text-stone-700 leading-relaxed">
-              <strong className="text-stone-900">計算式:</strong> HDCP = (隠し12H合計 × 1.5 − {parTotal}){sfMult && ' × 0.8'}, 上限 {sfCap}
+              <strong className="text-stone-900">計算式:</strong> HDCP = (隠し12H合計 × 1.5 − {parTotal}) × 0.8（上限なし）
             </div>
 
             <button onClick={async () => { const ok = await saveSetup(); if (ok) setView('landing') }}
@@ -352,7 +329,7 @@ export default function App() {
             </div>
 
             <div className="w-full mt-10 space-y-3 animate-slide-up" style={{ animationDelay: '0.15s' }}>
-              <button onClick={() => { setMyName(''); setMyScores(Array(18).fill('')); setMyKey(null); setView('player-name') }}
+              <button onClick={() => { setMyName(''); setMyScores((config?.pars || DEFAULT_PARS).map(String)); setMyKey(null); setView('player-name') }}
                 className="body-jp w-full py-5 bg-emerald-800 hover:bg-emerald-900 text-amber-100 rounded-xl font-bold tracking-[0.15em] transition shadow-lg text-base">
                 スコアを入力する
               </button>
@@ -463,9 +440,23 @@ export default function App() {
               <h2 className="display-jp text-2xl text-emerald-950 font-bold mb-2">送信完了</h2>
               <p className="body-jp text-stone-600 text-sm mb-8">{myName} さん、ありがとうございます</p>
 
-              <div className="bg-white/80 rounded-2xl p-6 shadow-lg border border-stone-200 inline-block mx-auto min-w-[180px]">
-                <div className="display-en text-amber-700 text-[10px] tracking-[0.4em] uppercase mb-1">Your Gross</div>
-                <div className="display-en text-emerald-950 text-5xl font-bold">{res?.gross}</div>
+              <div className="bg-white/80 rounded-2xl p-6 shadow-lg border border-stone-200 mx-auto max-w-sm">
+                <div className="flex justify-around items-center">
+                  <div>
+                    <div className="display-en text-amber-700 text-[10px] tracking-[0.3em] uppercase mb-1">Gross</div>
+                    <div className="display-en text-emerald-950 text-4xl font-bold">{res?.gross}</div>
+                  </div>
+                  <div className="w-px h-12 bg-stone-200" />
+                  <div>
+                    <div className="display-en text-amber-700 text-[10px] tracking-[0.3em] uppercase mb-1">HDCP</div>
+                    <div className="display-en text-stone-700 text-4xl font-bold">{res?.hdcp.toFixed(1)}</div>
+                  </div>
+                  <div className="w-px h-12 bg-stone-200" />
+                  <div>
+                    <div className="display-en text-amber-700 text-[10px] tracking-[0.3em] uppercase mb-1">Net</div>
+                    <div className="display-en text-emerald-900 text-4xl font-bold">{res?.net.toFixed(1)}</div>
+                  </div>
+                </div>
               </div>
 
               <p className="body-jp text-stone-500 text-xs mt-6">順位は幹事からの発表をお待ちください</p>
@@ -578,8 +569,7 @@ export default function App() {
             <div className="mt-3 body-jp text-[11px] text-stone-700 space-y-1.5 leading-relaxed">
               <div><strong>隠し12H:</strong> {config?.hidden.join(', ')}</div>
               <div><strong>パー合計:</strong> {config?.pars.reduce((a, b) => a + b, 0)}</div>
-              <div><strong>HDCP上限:</strong> {config?.cap}</div>
-              <div><strong>計算式:</strong> (隠し12H合計 × 1.5 − {config?.pars.reduce((a, b) => a + b, 0)}){config?.use80 && ' × 0.8'}, 上限適用</div>
+              <div><strong>計算式:</strong> (隠し12H合計 × 1.5 − {config?.pars.reduce((a, b) => a + b, 0)}) × 0.8（上限なし）</div>
             </div>
           </details>
 
@@ -642,21 +632,6 @@ export default function App() {
                           </button>
                         )
                       })}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="body-jp text-[10px] font-bold text-stone-700 uppercase tracking-[0.2em] mb-1.5 block">HDCP上限</label>
-                      <input type="number" value={sfCap} onChange={(e) => setSfCap(parseInt(e.target.value) || 0)}
-                        className="body-jp w-full px-4 py-3 bg-stone-50 rounded-lg border border-stone-300 text-sm" />
-                    </div>
-                    <div>
-                      <label className="body-jp text-[10px] font-bold text-stone-700 uppercase tracking-[0.2em] mb-1.5 block">係数×0.8</label>
-                      <button onClick={() => setSfMult(!sfMult)}
-                        className={`body-jp w-full px-4 py-3 rounded-lg border text-sm ${sfMult ? 'bg-emerald-800 text-amber-100 border-emerald-800' : 'bg-stone-50 text-stone-700 border-stone-300'}`}>
-                        {sfMult ? 'あり' : 'なし'}
-                      </button>
                     </div>
                   </div>
 
